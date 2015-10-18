@@ -1,0 +1,239 @@
+温度记录仪与手机端的通信协议
+===============================================================================   
+**[简介]**    
+通讯过程采用手机主动读取方式 ，建议先读取状态获取型号版本后读取其他信息  
+现有的记录仪仅提供了温度记录，**协议中的湿度值为0，APP中不使用**   
+数据包最大长度为 128 + 2 + 4 = 134  
+标准格式：
+
+**[0x7F][1\_LEN][1\_CMD][1\_SUM][N\_DATA]**  
+7F:  起始位  
+LEN: 长度为  
+CMD: 命令为，类型位  
+SUM: 反码求和 (不包括起始位)  
+DATA:可选  
+
+-------------------------------------------------------------------------------
+###[命令详解]###
+-------------------------------------------------------------------------------
+**[唤醒]00 监测连接是否存在**  
+
+> 下行：   
+> [0x7F][LEN][0x00][SUM]   
+> 7F 00 00 FD 
+> 
+> 上行：(防止回环)   
+> [0x7F][LEN][0xFF][SUM]   
+> 7F 00 FF FE
+
+**[读数据]01 读取字节对齐的128个字节**   
+
+> 下行：  
+> [0x7F][LEN][0x01][SUM][2\_NUM]  
+> NUM:表示第级块     
+> 7F 02 01 F8 00 00 ：读取第0块数据，地址0到地址127。   
+> 7F 02 01 F7 01 00 ：读取第1块数据，地址128到地址255。   
+> 7F 02 01 D8 20 00 : 读取第32块数据，地址4096到地址4096+127。
+> 上行：
+> [0x7F][LEN][0x01][SUM][2\_NUM][N_DATA]   
+> NUM：表示第几块   
+> DATA:表示原始数据   
+> 7F 82 01 78 **00 00** 8F ED 2D 14 C8 55 1E 00 81 A5 84 13 C8 55 1E 00 00 19 DE 01 00 00 00 00 00 19 DE 01 00 00 00 00 00 19 DE 01 00 00 00 00 00 19 DE 01 00 00 00 00 00 19 DE 01 00 00 00 00 00 19 DE 01 00 00 00 00 82 FA 2D 14 C8 55 1E 00 FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF 
+
+这是记录了88个字节的数据 6条
+7F 82 01 78 00 00 8F EB 5E 7A 3D 4B 1E 00 81 F9 5E 7A 3D 4B 1E 00 00 2B CC 01 00 00 00 00 00 25 D2 01 00 00 00 00 00 2C CB 01 00 00 00 00 82 9F B7 7A 3D 4B 1E 00 FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF
+
+7F 82 01 78 00 00 ：头部
+8F EB 5E 7A 3D 4B 1E 00 ： 4096对齐插入的时间点 CMD:8F token  [CMD\_1][SUM\_1][TIME\_4][INTVAL\_2] ，时间5E 7A 3D 4B ->0x4B3D7A5E ,''Fri Jan 01 12:30:22 2010''(时间未校准)，间隔 0x1E = 30S
+81 F9 5E 7A 3D 4B 1E 00 ： 开始记录的时间点    [CMD\_1][SUM\_1][TIME\_4][INTVAL\_2]    
+00 2B CC 01 00 00 00 00 ： 数据 cc 01   Fri Jan 01 12:30:52
+00 25 D2 01 00 00 00 00 ： 数据 d2 01   Fri Jan 01 12:31:22
+00 2C CB 01 00 00 00 00 :               Fri Jan 01 12:31:52
+82 9F B7 7A 3D 4B 1E 00 ：记录结束 82 close  [CMD\_1][SUM\_1][TIME\_4][INTVAL\_2]  'Fri Jan 01 12:31:51 2010'
+FF FF FF FF FF FF FF FF 
+FF FF FF FF FF FF FF FF 
+FF FF FF FF FF FF FF FF 
+FF FF FF FF FF FF FF FF 
+FF FF FF FF FF FF FF FF 
+FF FF FF FF FF FF FF FF 
+FF FF FF FF FF FF FF FF 
+FF FF FF FF FF FF FF FF 
+FF FF FF FF FF FF FF FF 
+FF FF FF FF FF FF FF FF
+
+
+
+
+**[读取参数]02 读取记录仪的参数配置**    
+
+> 下行：   
+> [0x7F][LEN][0x02][SUM]   
+> 7F 00 02 FB
+>     
+> 上行：   
+> [0x7F][LEN][0x02][SUM][PARA]     
+> PARA:参数表结构体的字节码,与具体的设备相关  
+> **因为有高级参数，参数表必须先读然后修改必要值后写**   
+> 对于SL0B601有如下定义
+> [8\_REV][10\_ID][10\_KEY][2\_INTVAL][1\_WAKEUP][1\_MODE][1\_TMIN][1\_TMAX]   
+> REV：保留   
+> ID:8位字符串   
+> KEY:8位字符串   
+> INTVAL:2字节变量，采集时间间隔 10-1000 ，单位S   
+> WAKEUP:高级参数，是否使蓝牙常开 0 是，1 否   
+> MODE:高级参数，配置启动记录方式和数据来源 0-3   
+> TMIN:最小温度 X-100, 80表示-20度   
+> TMAX:最大温度 X-100, 120表示 20度   
+> 
+> 7F 22 02 01 01 00 00 00 D4 30 00 00 42 57 58 30 30 30 30 32 00 00 42 57 58 30 30 30 30 32 00 00 1E 00 00 01 46 86 
+
+**[更新参数]03 更新参数**  
+  
+> 下行：   
+> [0x7F][LEN][0x03][SUM][PARA]   
+> PARA见命令02   
+> 上行：  
+> [0x7F][LEN][0x03][SUM][PARA]
+
+**[更新时间]04 更新记录仪中时间**   
+> 下行：
+> [0x7F][LEN][0x04][SUM][4\_TIME]
+> TIME:UTC不带时区的秒数，如果是8区，需先减去8个小时
+> 7F 04 04 39 5D 3E C8 55
+> 
+> 上行：
+> [0x7F][LEN][0x04][SUM][4\_TIME]
+> 7F 04 04 39 5D 3E C8 55
+
+**[读取状态]05 读取记录仪的状态**   
+
+> 下行：   
+> [0x7F][1_LEN][0x05][SUM]   
+> 7F 00 05 F8   
+>     
+> 上行：   
+>  [0x7F][1_LEN][0x05][SUM][8_MODULE][8_ID][8_KEY][4_TIME][2_VER][2_VOLTAGE][16_NAME][8_0x00]  
+>  MODULE:SLUAN型号 如SL0B801   
+>  ID:设备ID   
+>  KEY:设备KEY   
+>  TIME:设备时间   
+>  VER:软件版本 01 00 表示 V1.00   
+>  VOLTAGE:设备当前电压，单位mV   
+>  NAME:设备名，当前未使用，与MODULE相同    
+>  7F 34 05 24 53 4C 30 42 36 30 30 00 42 57 58 30 30 30 30 32 42 57 58 30 30 30 30 32 8F F2 22 56 00 01 4E 10 53 4C 30 42 36 30 30 00 00 00 00 00 00 00 00 00 00 00 00 00    
+>  7F 34 05 24 : 7F 头部，34数据长度，05 指令类型，24 反码求和   
+   53 4C 30 42 36 30 30 00 ：SL0B600
+   42 57 58 30 30 30 30 32 ：BWX00002
+   42 57 58 30 30 30 30 32 ：BWX00002 
+   8F F2 22 56             ：0x5622f28f = 2015-10-18 1:14:0 UTC时间不带时区
+   00 01                   ：0x0100  v1.0
+   4E 10                   : 0x104E = 4174mV
+   53 4C 30 42 36 30 30 00 00 00 00 00 00 00 00 00 00 00 00 00 :SL0B600
+
+**[读取当前记录条数]06  读取记录条数**   
+  
+> 下行:   
+>     [0x7F][LEN][0x06][SUM]  
+>     7F 00 06 F7
+>     
+> 上行：   
+>    [0x7F][LEN][0x06][SUM][4\_BASE][4\_NUM]   
+>    BASE:当前记录的开始地址   
+>    NUM:当前记录的条数  
+>    7F 08 06 09 00 30 00 00 A8 06 00 00  
+       
+**[读取当前传感器值]07  读取传感器的当前值**   
+  
+> 下行:   
+>     [0x7F][LEN][0x07][SUM]  
+>     7F 00 07 F6
+>     
+> 上行：   
+>    [0x7F][LEN][0x07][SUM][1\_STATUS][1\_RESERVE][2\_TEMP][2\_HUMI]   
+>    STATUS: BIT6 Temper data faild, BIT5 Humidity data failed,BIT4 lock status
+>    TEMP :当前温度值   
+>    HUMI :当前湿度值  
+>     
+   
+**[读取当前传感器值]08  读取当前变化量，各产品不同（替换06、07）**   
+  
+> 下行:   
+>     [0x7F][LEN][0x08][SUM]  
+>     7F 00 08 F5
+>     
+> 上行：  
+>    SL0B600 
+>    [0x7F][LEN][0x08][SUM][1\_STATUS][1\_RESERVE][2\_TEMP][4\_BASE][4\_NUM]   
+>    STATUS:   
+>         BIT6 Temper data faild,   
+>         BIT5 Humidity data failed,  
+>         BIT4 lock status  
+>         BIT3 isrecording
+>         BIT2 islowpower  
+>    TEMP :当前温度值   
+>    BASE :当前记录的开始地址
+>    NUM  :当前记录的条数 
+>    7F 0C 08 02 00 00 DA 01 00 00 00 00 00 00 00 00 
+     7F 0C 08 02 ：
+     00 00 : 未开始记录 
+     DA 01 ： 温度 0x01da  -> 0x1da /16 = 29.625
+     00 00 00 00 00 00 00 00  :未有数据记录
+     
+>    7F 0C 08 F1 08 00 E3 01 00 00 00 00 00 00 00 00 ：记录过程中
+>    7F 0C 08 F1 08 00 E3 01 00 00 00 00 00 00 00 00 ：记录过程中
+>    7F 0C 08 9B 00 00 E9 01 00 00 00 00 58 00 00 00 : 记录完成，记录起始地址为0x0000,记录了0x58 =88 个字节，11条数据
+     7F 0C 08 B5 00 00 DF 01 00 10 00 00 38 00 00 00 ：记录完成，记录起始地址为0x1000,记录了0x38 =56 个字节，7条数据
+**[重启]10 生效参数并清除FLASH记录指针** 
+  
+> 下行：  
+> [0x7F][1_LEN][0x10][SUM]  
+>     7F 00 10 ED  
+> 上行：  
+> 无返回
+
+
+**[重置蓝牙]11 特殊用途 手机不实现**  
+ 
+> 工程命令，设置波特率、唤醒时间等。   
+> 下行:   
+> [0x7F][LEN][0x11][SUM][BUD]   
+> 7F 01 11 E9 01  
+> 7F 01 11 EA 00  
+> 
+>    BUD: 0-4800,1-9600,
+
+
+**[通用]80/81**   
+> 错误   
+> [0x7F][LEN][0x80][SUM]   
+> 正确   
+> [0x7F][LEN][0x81][SUM]  
+
+ 
+-------------------------------------------------------------------------------
+###[FLASH数据储存格式]###
+------------------------------------------------------------------------------- 
+**8字节数据：**  
+[CMD\_1][SUM\_1][TEMP\_2][HUMI\_2][NC_2]
+
+> CMD:  
+> BIT7:FLAG FOR data and Event   
+> BIT6:FLAG FOR Temper data failed flag   
+> BIT5:FLAG FOR humi data failed flag   
+> BIT4:FLAG FOR LOCK/REC  
+> BIT3 - BIT0: data   
+
+> CMD:00 value  [CMD\_1][SUM\_1][TEMP\_2][HUMI\_2][NC\_2]   
+> CMD:81 open   [CMD\_1][SUM\_1][TIME\_4][INTVAL\_2]   
+> CMD:82 close  [CMD\_1][SUM\_1][TIME\_4][INTVAL\_2]   
+> CMD:8F token  [CMD\_1][SUM\_1][TIME\_4][INTVAL\_2]   
+> TEMP 计算方式：16进制 X，如果X>32768 则温度为：（65536-X）/16 ,否则为：X/16  
+> **FLASH中4K起始的8字节存8F token。数据中未存时间点，由时间间隔和FLASH的地址推断**  
+
+
+
+
+
+
+
+
