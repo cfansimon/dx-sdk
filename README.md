@@ -216,7 +216,7 @@ dxsdk.sys.stopNotify(peripheral, function(){
 
 #### 3.1 通用api接口,传入16进制指令返回的16进制数据
 
-    api.execute(peripheral, command, onSuccess, onError);
+    api.execute(peripheral, command, onSuccess);
 
 ** 参数 **
 
@@ -225,7 +225,6 @@ dxsdk.sys.stopNotify(peripheral, function(){
 | peripheral | object | 是 | 设备的peripheral对象，由sys.connect成功回调函数中传回 |
 | command | string | 是 | 多协通信协议中16进制指令 |
 | onSuccess | function | 是 | Success callback，回调参数为data，是16进制的数组 |
-| onError | function | 否 | error callback，回调参数为errorMsg |
 
 ** 示例 **
 
@@ -263,6 +262,6 @@ dxsdk.api.status(peripheral, function(json){
 | id | string | 设备ID |
 | key | string | 设备KEY |
 | time | string | 设备时间，如2015-01-01 12:00:00 |
-| ver | string | 软件版本，如v1.00 |
+| ver | string | 软件版本，如v1.0 |
 | voltage | string | 设备当前电压,单位mV |
 | name | string | 设备名 |

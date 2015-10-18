@@ -29,8 +29,7 @@ define(function() {
         return characteristics[i];
       }
     };
-    config.alert("该蓝牙模块不是HC-08模块，无法读写");
-    return null;
+    return "该蓝牙模块不是HC-08模块，无法读写";
   }
 
   function commandToBytes(command) {
@@ -99,38 +98,39 @@ define(function() {
   }
 
   sys.write = function(peripheral, data, onSuccess, onError) {
-    var characteristic = getCharacteristicByHC08(peripheral.characteristics);
-    if (characteristic) {
-      window.ble.writeWithoutResponse(peripheral.id, characteristic.service, characteristic.characteristic, commandToBytes(data), onSuccess, onError);
+    var res = getCharacteristicByHC08(peripheral.characteristics);
+    if (typeof res == "object") {
+      window.ble.writeWithoutResponse(peripheral.id, res.service, res.characteristic, commandToBytes(data), onSuccess, onError);
     } else {
-      onError && onError();
+      onError && onError(res);
     }
   }
 
   sys.startNotify = function(peripheral, onSuccess, onError) {
-    var characteristic = getCharacteristicByHC08(peripheral.characteristics);
-    if (characteristic) {
-      window.ble.startNotification(peripheral.id, characteristic.service, characteristic.characteristic, function(buffer){
+    var res = getCharacteristicByHC08(peripheral.characteristics);
+    if (typeof res == "object") {
+      window.ble.startNotification(peripheral.id, res.service, res.characteristic, function(buffer){
         onSuccess(bytesToArray(buffer));
       }, onError);
     } else {
-      onError && onError();
+      onError && onError(res);
     }
   }
 
   sys.stopNotify = function(peripheral, onSuccess, onError) {
-    var characteristic = getCharacteristicByHC08(peripheral.characteristics);
-    if (characteristic) {
-      window.ble.stopNotification(peripheral.id, characteristic.service, characteristic.characteristic, onSuccess, onError);
+    var res = getCharacteristicByHC08(peripheral.characteristics);
+    if (typeof res == "object") {
+      window.ble.stopNotification(peripheral.id, res.service, res.characteristic, onSuccess, onError);
     } else {
-      onError && onError();
+      onError && onError(res);
     }
   }
 
   var api = {};
 
   //api底层方法，传入多协文档的16进制指令，输出记录仪返回的16进制数据，未做数据解析
-  api.execute = function(peripheral, command, onSuccess, onError) {
+  api.execute = function(peripheral, command, onSuccess) {
+    config.onLoading && config.onLoading();
     sys.write(peripheral, command, function(){
 
       var isReceiving = false;
@@ -140,22 +140,16 @@ define(function() {
 
       var t1 = setTimeout(function(){
         if (!isReceiving) {
-          sys.stopNotify(peripheral, function(){
-            config.alert("已停止接收数据");
-          });
+          // sys.stopNotify(peripheral);
           clearTimeout(t2);
           config.alert("响应超时，10秒内未收到任何数据");
-          onError && onError();
         }
       },1000*10);
 
       var t2 = setTimeout(function(){
         if (!isReceiving) {
-          sys.stopNotify(peripheral, function(){
-            config.alert("已停止接收数据");
-          });
+          // sys.stopNotify(peripheral);
           config.alert("数据接收超时，1分钟内未收到完整数据");
-          onError && onError();
         }
       },1000*60*1);
 
@@ -169,9 +163,8 @@ define(function() {
         if (totalLength == totalData.length) {
           isReceived = true;
           clearTimeout(t2);
-          sys.stopNotify(peripheral, function(){
-            config.alert("已停止接收数据");
-          });
+          // sys.stopNotify(peripheral);
+          config.onComplete && config.onComplete();
           onSuccess && onSuccess(totalData); //当前方案是数据全部读完再回调
         }
         if (!isReceiving) {
@@ -179,16 +172,14 @@ define(function() {
           clearTimeout(t1);
         }
       }, function(errorMsg){
+        config.onComplete && config.onComplete();
         config.alert("数据接收失败:" + errorMsg);
       });
-
-      config.onComplete && config.onComplete();
 
     }, function(errorMsg){
 
       config.alert("指令\"" + command + "\"发送失败:" + errorMsg);
       config.onComplete && config.onComplete();
-      onError && onError(errorMsg);
 
     });
   }
@@ -251,8 +242,8 @@ define(function() {
         id: api.translator.ascii(data.slice(12,20)),
         key: api.translator.ascii(data.slice(20,28)),
         time: api.translator.time(data.slice(28,32)),
-        ver: api.translator.float(data.slice(32,34)),
-        voltage: api.translator.float(data.slice(34,36)),
+        ver: "v" + api.translator.float(data.slice(32,34)),
+        voltage: api.translator.float(data.slice(34,36)) + "mV",
         name: api.translator.ascii(data.slice(36,44))
       };
       onSuccess && onSuccess(json);
