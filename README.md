@@ -17,23 +17,33 @@
 
 | 名称  | 类型  | 必需   | 说明 |
 | ---- | ----- | ----- | ---- |
-| onLoading | function | 否 | 耗时操作等待时的回调 |
-| onComplete | function | 否 | 耗时操作完成时的回调 |
+| preloader | function | 否 | 弹出等待提示层，含preloader.show(msg)、preloader.hide()方法 |
 | alert | function | 否 | 改变alert UI交互，例如可以使用Framework7的模态框弹出方法。默认使用js原生alert方式 |
 
 ** 示例 **
 
 ```
-dxsdk.setConfig({
-    onLoading: function() {
-        //显示进度提示
+var isLoading = false;
+var preloader = {
+    show: function(msg) {
+        if (!isLoading) {
+            f7.showPreloader(msg);
+            isLoading = true;
+        }
     },
-    onComplete: function() {
-        //关闭进度提示
-    },
-    alert: function(msg) {
-        //使用其他友好模态弹框提示msg
+    hide: function() {
+        if (isLoading) {
+            f7.hidePreloader();
+            isLoading = false;
+        }
     }
+}
+var alert = function(msg) {
+    f7.alert(msg, "提示");
+}
+dxsdk.setConfig({
+    preloader: preloader,
+    alert: alert
 });
 ```
 #### 1.2 获取配置
@@ -103,7 +113,8 @@ dxsdk.sys.stopScan([], function() {
 | ---- | ----- | ----- | ---- |
 | device_id | string | 是 | 设备mac地址 |
 | onSuccess | function | 是 | Success callback，回调参数为peripheral对象，看示例 |
-| onError | function | 否 | error callback，回调参数为errorMsg |
+| onError | function | 否 | 连接失败回调，回调参数为errorMsg |
+| onDisconnected | function | 否 | 连接断开后的回调 |
 
 ** 示例 **
 
@@ -130,7 +141,9 @@ dxsdk.sys.stopScan([], function() {
 dxsdk.sys.connect(discoveredDevices[i].id, function(peripheral){
     console.log(JSON.stringify(peripheral));
 }, function(errorMsg){
-    alert('连接失败：' + errorMsg);
+	alert('连接失败：' + errorMsg);
+}, function(){
+	alert('连接已断开');
 });
 ```
 #### 2.4 断开设备连接
@@ -216,7 +229,7 @@ dxsdk.sys.stopNotify(peripheral, function(){
 
 #### 3.1 通用api接口,传入16进制指令返回的16进制数据
 
-    api.execute(peripheral, command, onSuccess);
+    api.execute(peripheral, command, onSuccess, onProgress);
 
 ** 参数 **
 
@@ -225,6 +238,7 @@ dxsdk.sys.stopNotify(peripheral, function(){
 | peripheral | object | 是 | 设备的peripheral对象，由sys.connect成功回调函数中传回 |
 | command | string | 是 | 多协通信协议中16进制指令 |
 | onSuccess | function | 是 | Success callback，回调参数为data，是16进制的数组 |
+| onProgress | function | 否 | 每次读一组数据后回调进度提示，回调参数为array ['已读数据量', '总数据量'] |
 
 ** 示例 **
 
@@ -238,7 +252,7 @@ dxsdk.api.execute(peripheral, "7F 00 05 F8", function(data){
 ```
 #### 3.2 获取记录仪状态
 
-    api.status(peripheral, onSuccess);
+    api.status(peripheral, onSuccess, onProgress);
 
 ** 参数 **
 
@@ -246,6 +260,7 @@ dxsdk.api.execute(peripheral, "7F 00 05 F8", function(data){
 | ---- | ----- | ----- | ---- |
 | peripheral | object | 是 | 设备的peripheral对象，由sys.connect成功回调函数中传回 |
 | onSuccess | function | 是 | Success callback，回调参数为json对象，看示例 |
+| onProgress | function | 否 | 参见3.1 api.execute 接口说明 |
 
 ** 示例 **
 
