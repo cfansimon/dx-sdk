@@ -11,6 +11,11 @@ define(function() {
             show: null,
             hide: null
         },
+        timeout: {
+            connect: 15,
+            startRead: 30,
+            finishRead: 60*1.5
+        },
         alert: function(msg) {
             alert(msg);
         }
@@ -94,15 +99,15 @@ define(function() {
 
         var isConnected = false;
         var t = setTimeout(function(){
-            if (!isConnected) {
+            if (isConnected) {
                 try {
                     sys.disconnect(deviceId); //确保断开
                 } catch (e) {
 
                 }
-                onError && onError("连接超时，15秒内未连接成功");
             }
-        },1000*15);
+            onError && onError("连接超时，" + config.timeout.connect + "秒内未连接成功");
+        },1000*config.timeout.connect);
 
         window.ble.connect(deviceId, function(peripheral) {
             isConnected = true;
@@ -110,11 +115,12 @@ define(function() {
             preloader.hide();
             onSuccess && onSuccess(peripheral);
         }, function(errorMsg) {
+            isConnected = false;
+            clearTimeout(t);
             // 用Disconnected判断是连接失败还是连接成功后再断开
             if (errorMsg == 'Disconnected') {
                 onDisconnected && onDisconnected();
             } else {
-                clearTimeout(t);
                 preloader.hide();
                 onError && onError(errorMsg);
             }
@@ -186,61 +192,67 @@ define(function() {
     var api = {};
 
     //api底层方法，传入多协文档的16进制指令，输出记录仪返回的16进制数据，未做数据解析
-    api.execute = function(peripheral, command, onSuccess, onProgress) {
-        preloader.show("准备读取数据");
+    api.execute = function(peripheral, command, isNeedResponse, onSuccess, onError, onProgress) {
+        // preloader.show("准备读取数据");
+        onProgress && onProgress([1, 100]); //模拟一点进展
         sys.write(peripheral, command, function(){
-            var isReceiving = false;
-            var isReceived = false;
-            var totalData = [];
-            var totalLength = 0;
 
-            var t1 = setTimeout(function(){
-                if (!isReceiving) {
-                    clearTimeout(t2);
-                    preloader.hide();
-                    config.alert("响应超时，10秒内未收到任何数据");
-                    sys.stopNotify(peripheral);
-                }
-            },1000*10);
+            if (isNeedResponse) {
+                var isReceiving = false;
+                var isReceived = false;
+                var totalData = [];
+                var totalLength = 0;
 
-            var t2 = setTimeout(function(){
-                if (!isReceived) {
-                    preloader.hide();
-                    config.alert("数据接收超时，30秒内未收到完整数据");
-                    sys.stopNotify(peripheral);
-                }
-            },1000*30*1);
+                var t1 = setTimeout(function(){
+                    if (!isReceiving) {
+                        clearTimeout(t2);
+                        // preloader.hide();
+                        onError && onError("响应超时，" + config.timeout.startRead + "秒内未收到任何数据");
+                        sys.stopNotify(peripheral);
+                    }
+                },1000*config.timeout.startRead);
 
-            sys.startNotify(peripheral, function(data){
-                //关闭loading提示，可以在onProgress里启用进度条提示
-                preloader.hide();
-                // 蓝牙数据传输每组20条记录，多余20条会自动拆分成多个Notify发送
-                // 累加每次Notify发送过来的数据
-                // Array.prototype.push.apply(totalData, data);
-                // console.log(data);
-                totalData = totalData.concat(data);
-                // 计算本次报文总长度，按照多协文档第2位是长度位，长度为不含前面4位，所以加4
-                totalLength = 4 + parseInt(totalData[1], 16);
-                onProgress && onProgress([totalData.length, totalLength]);
-                if (totalLength == totalData.length) {
-                    isReceived = true;
-                    clearTimeout(t2);
-                    onSuccess && onSuccess(totalData); //当前方案是数据全部读完再回调
-                    sys.stopNotify(peripheral);
-                }
-                if (!isReceiving) {
-                    isReceiving = true;
-                    clearTimeout(t1);
-                }
-            }, function(errorMsg){
-                preloader.hide();
-                config.alert("数据接收失败:" + errorMsg);
-            });
+                var t2 = setTimeout(function(){
+                    if (!isReceived) {
+                        // preloader.hide();
+                        onError && onError("数据接收超时，" + config.timeout.finishRead + "秒内未收到完整数据");
+                        sys.stopNotify(peripheral);
+                    }
+                },1000*config.timeout.finishRead);
+
+                sys.startNotify(peripheral, function(data){
+                    //关闭loading提示，可以在onProgress里启用进度条提示
+                    // preloader.hide();
+                    // 蓝牙数据传输每组20条记录，多余20条会自动拆分成多个Notify发送
+                    // 累加每次Notify发送过来的数据
+                    // Array.prototype.push.apply(totalData, data);
+                    // console.log(data);
+                    totalData = totalData.concat(data);
+                    // 计算本次报文总长度，按照多协文档第2位是长度位，长度为不含前面4位，所以加4
+                    totalLength = 4 + parseInt(totalData[1], 16);
+                    onProgress && onProgress([totalData.length, totalLength]);
+                    if (totalLength == totalData.length) {
+                        isReceived = true;
+                        clearTimeout(t2);
+                        onSuccess && onSuccess(totalData); //当前方案是数据全部读完再回调
+                        sys.stopNotify(peripheral);
+                    }
+                    if (!isReceiving) {
+                        isReceiving = true;
+                        clearTimeout(t1);
+                    }
+                }, function(errorMsg){
+                    // preloader.hide();
+                    onError && onError("数据接收失败:" + errorMsg);
+                });
+            } else { //不需要接收数据返回
+                onSuccess && onSuccess();
+            }
 
         }, function(errorMsg){
 
-            preloader.hide();
-            config.alert("指令\"" + command + "\"发送失败:" + errorMsg);
+            // preloader.hide();
+            onError && onError("指令\"" + command + "\"发送失败:" + errorMsg);
 
         });
     }
@@ -253,6 +265,13 @@ define(function() {
                 if (code != 0) {
                     str += String.fromCharCode(code);
                 }
+            });
+            return str;
+        },
+        binary: function(data) {
+            var str = "";
+            data.map(function(item){
+                str += parseInt(item, 16).toString(2);
             });
             return str;
         },
@@ -285,6 +304,9 @@ define(function() {
             var ss = fixZero(date.getSeconds());
             return y + "-" + m + "-" + d + " " + hh + ":" + mm + ":" + ss;
         },
+        temp: function(data) {
+            return (parseInt(data.reverse().join(""), 16)/16).toFixed(2);
+        },
         literal: function(data, separator) {
             if (!separator) {
                 separator = "";
@@ -293,10 +315,15 @@ define(function() {
         }
     };
 
-    //05获取记录仪状态
-    api.status = function(peripheral, onSuccess, onProgress) {
+    //10 生效参数并清除FLASH记录指针
+    api.reset = function(peripheral) {
+        api.execute(peripheral, "7F 00 10 ED", false);
+    };
 
-        api.execute(peripheral, "7F 00 05 F8", function(data){
+    //05获取记录仪状态
+    api.status = function(peripheral, onSuccess, onError, onProgress) {
+
+        api.execute(peripheral, "7F 00 05 F8", true, function(data){
             // [0x7F][1_LEN][0x05][SUM][8_MODULE][8_ID][8_KEY][4_TIME][2_VER] [2_VOLTAGE][16_NAME][8_0x00]
             var json = {
                 module: api.translator.ascii(data.slice(4,12)),
@@ -308,7 +335,21 @@ define(function() {
                 name: api.translator.ascii(data.slice(36,44))
             };
             onSuccess && onSuccess(json);
-        }, onProgress);
+        }, onError, onProgress);
+      
+    };
+
+    //08 读取当前变化量
+    api.currentData = function(peripheral, onSuccess, onError, onProgress) {
+
+        api.execute(peripheral, "7F 00 08 F5", true, function(data){
+            // [0x7F][LEN][0x08][SUM][1_STATUS][1_RESERVE][2_TEMP][4_BASE][4_NUM]
+            var json = {
+                status: api.translator.binary(data.slice(4,5)),
+                temp: api.translator.temp(data.slice(6,8))
+            };
+            onSuccess && onSuccess(json);
+        }, onError, onProgress);
       
     }
 

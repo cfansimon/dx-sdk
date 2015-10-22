@@ -17,7 +17,8 @@
 
 | 名称  | 类型  | 必需   | 说明 |
 | ---- | ----- | ----- | ---- |
-| preloader | function | 否 | 弹出等待提示层，含preloader.show(msg)、preloader.hide()方法 |
+| preloader | object | 否 | 弹出等待提示层，含preloader.show(msg)、preloader.hide()方法 |
+| timeout | object | 否 | 各种超时参数，单位秒，含connect(连接超时，默认15)、startRead(接收不到数据超时，默认60)、finishRead(接收完整数据超时，默认60*1.5) |
 | alert | function | 否 | 改变alert UI交互，例如可以使用Framework7的模态框弹出方法。默认使用js原生alert方式 |
 
 ** 示例 **
@@ -57,7 +58,7 @@ dxsdk.setConfig({
 ** 示例 **
 
 ```
-dxsdk.config.onLoading
+dxsdk.config.preloader
 ```
 
 ### 2 蓝牙通信类接口
@@ -225,7 +226,7 @@ dxsdk.sys.stopNotify(peripheral, function(){
     alert("已停止接收数据");
 });
 ```
-### 3 上层应用api接口
+### 3 上层应用api接口(注意：记录仪只支持一个接口调用结束后再调用下一个接口)
 
 #### 3.1 通用api接口,传入16进制指令返回的16进制数据
 
@@ -237,7 +238,9 @@ dxsdk.sys.stopNotify(peripheral, function(){
 | ---- | ----- | ----- | ---- |
 | peripheral | object | 是 | 设备的peripheral对象，由sys.connect成功回调函数中传回 |
 | command | string | 是 | 多协通信协议中16进制指令 |
+| isNeedResponse | boolean | 是 | 该command是否需要等待数据返回 |
 | onSuccess | function | 是 | Success callback，回调参数为data，是16进制的数组 |
+| onError | function | 是 | onError callback，回调参数为errorMsg |
 | onProgress | function | 否 | 每次读一组数据后回调进度提示，回调参数为array ['已读数据量', '总数据量'] |
 
 ** 示例 **
@@ -260,7 +263,8 @@ dxsdk.api.execute(peripheral, "7F 00 05 F8", function(data){
 | ---- | ----- | ----- | ---- |
 | peripheral | object | 是 | 设备的peripheral对象，由sys.connect成功回调函数中传回 |
 | onSuccess | function | 是 | Success callback，回调参数为json对象，看示例 |
-| onProgress | function | 否 | 参见3.1 api.execute 接口说明 |
+| onError | function | 是 | 参见3.1的onError |
+| onProgress | function | 否 | 参见3.1的onProgress |
 
 ** 示例 **
 
