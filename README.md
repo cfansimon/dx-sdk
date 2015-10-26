@@ -17,50 +17,19 @@
 
 | 名称  | 类型  | 必需   | 说明 |
 | ---- | ----- | ----- | ---- |
-| preloader | object | 否 | 弹出等待提示层，含preloader.show(msg)、preloader.hide()方法 |
-| timeout | object | 否 | 各种超时参数，单位秒，含connect(连接超时，默认15)、startRead(接收不到数据超时，默认60)、finishRead(接收完整数据超时，默认60*1.5) |
+| timeout | object | 否 | 超时参数，单位秒，含connect(连接超时，默认30) |
 | alert | function | 否 | 改变alert UI交互，例如可以使用Framework7的模态框弹出方法。默认使用js原生alert方式 |
 
 ** 示例 **
 
 ```
-var isLoading = false;
-var preloader = {
-    show: function(msg) {
-        if (!isLoading) {
-            f7.showPreloader(msg);
-            isLoading = true;
-        }
-    },
-    hide: function() {
-        if (isLoading) {
-            f7.hidePreloader();
-            isLoading = false;
-        }
-    }
-}
 var alert = function(msg) {
     f7.alert(msg, "提示");
 }
 dxsdk.setConfig({
-    preloader: preloader,
     alert: alert
 });
 ```
-#### 1.2 获取配置
-
-    config;
-
-** 可配置项 **
-
-与1.1相同
-
-** 示例 **
-
-```
-dxsdk.config.preloader
-```
-
 ### 2 蓝牙通信类接口
 
 #### 2.1 扫描蓝牙设备
@@ -280,7 +249,7 @@ dxsdk.api.status(peripheral, function(json){
 | module | string | SLUAN型号，如SL0B801 |
 | id | string | 设备ID |
 | key | string | 设备KEY |
-| time | string | 设备时间，如2015-01-01 12:00:00 |
+| time | string | 设备时间，返回时间戳 |
 | ver | string | 软件版本，如v1.0 |
 | voltage | string | 设备当前电压,单位mV |
 | name | string | 设备名 |
