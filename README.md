@@ -253,3 +253,106 @@ dxsdk.api.status(peripheral, function(json){
 | ver | string | 软件版本，如v1.0 |
 | voltage | string | 设备当前电压,单位mV |
 | name | string | 设备名 |
+
+#### 3.3 把手机时间同步到记录仪中
+
+    api.syncTime(peripheral, onSuccess, onError, onProgress);
+
+** 参数 **
+
+| 名称  | 类型  | 必需   | 说明 |
+| ---- | ----- | ----- | ---- |
+| peripheral | object | 是 | 设备的peripheral对象，由sys.connect成功回调函数中传回 |
+| onSuccess | function | 是 | Success callback，回调参数为json对象，看示例 |
+| onError | function | 是 | 参见3.1的onError |
+| onProgress | function | 否 | 参见3.1的onProgress |
+
+** 示例 **
+
+```
+dxsdk.api.syncTime(peripheral, function(json){
+    alert(JSON.stringify(json));
+});
+```
+** 返回值 **
+
+| 名称  | 类型  | 说明 |
+| ---- | ----- | ---- |
+| time | string | 设备时间，返回时间戳 |
+
+#### 3.4 读取当前变化量
+
+    api.currentData(peripheral, onSuccess, onError, onProgress);
+
+** 参数 **
+
+| 名称  | 类型  | 必需   | 说明 |
+| ---- | ----- | ----- | ---- |
+| peripheral | object | 是 | 设备的peripheral对象，由sys.connect成功回调函数中传回 |
+| onSuccess | function | 是 | Success callback，回调参数为json对象，看示例 |
+| onError | function | 是 | 参见3.1的onError |
+| onProgress | function | 否 | 参见3.1的onProgress |
+
+** 示例 **
+
+```
+dxsdk.api.currentData(peripheral, function(json){
+    alert(JSON.stringify(json));
+});
+```
+** 返回值 **
+
+| 名称  | 类型  | 说明 |
+| ---- | ----- | ---- |
+| isRecording | boolean | 标识记录仪是否正在记录温度，正在记录时不要去读历史数据 |
+| voltage | int | 剩余电量，百分比 |
+| temp | float | 实时温度，单位摄氏度 |
+| time | int | 当前时间戳 |
+| logTime | int | 温度历史记录起始时间 |
+| intval | int | 温度历史记录间隔时间 |
+| num | int | 温度历史记录中存储温度的数量 |
+
+#### 3.5 读取温度历史记录
+
+    api.historyData(peripheral, totalCount, onSuccess, onError, onProgress);
+
+** 参数 **
+
+| 名称  | 类型  | 必需   | 说明 |
+| ---- | ----- | ----- | ---- |
+| peripheral | object | 是 | 设备的peripheral对象，由sys.connect成功回调函数中传回 |
+| totalCount | int | 是 | 温度历史记录中存储温度的数量 |
+| onSuccess | function | 是 | Success callback，回调参数为json对象，看示例 |
+| onError | function | 是 | 参见3.1的onError |
+| onProgress | function | 否 | 参见3.1的onProgress |
+
+** 示例 **
+
+```
+var num = {3.4接口读取到的数据}
+var logTime = {3.4接口读取到的数据}
+var intval = {3.4接口读取到的数据}
+dxsdk.api.historyData(peripheral, num, function(data){
+	var dataWithTime = [];
+    for(var i in data) {
+        dataWithTime[i] = {
+            temp: data[i],
+            time: logTime + intval*i
+        }
+    }
+    console.log('dataWithTime', dataWithTime);
+    //输出
+    //[{temp:22.63,time:1448713821},{ ... }]
+});
+```
+** 返回值 **
+
+| 名称  | 类型  | 说明 |
+| ---- | ----- | ---- |
+| isRecording | boolean | 标识记录仪是否正在记录温度，正在记录时不要去读历史数据 |
+| voltage | int | 剩余电量，百分比 |
+| temp | float | 实时温度，单位摄氏度 |
+| time | int | 当前时间戳 |
+| logTime | int | 温度历史记录起始时间 |
+| intval | int | 温度历史记录间隔时间 |
+| num | int | 历史记录中存储温度的数量 |

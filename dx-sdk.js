@@ -152,6 +152,10 @@ define(function() {
         }
     }
 
+    var queue = {};
+    queue.tasks = [];
+    
+
     var api = {};
 
     //api底层方法，传入多协文档的16进制指令，输出记录仪返回的16进制数据，未做数据解析
@@ -170,7 +174,6 @@ define(function() {
                     // 累加每次Notify发送过来的数据
                     // Array.prototype.push.apply(totalData, data);
                     totalData = totalData.concat(data);
-                    console.log(data.join(" "));
                     if (totalData.length < 4) { //返回数据至少有4位
                         onError && onError("模块返回的数据长度有误，当前返回值为" + totalData.join(" "));
                     } else {
@@ -178,6 +181,7 @@ define(function() {
                         totalLength = 4 + parseInt(totalData[1], 16);
                         onProgress && onProgress([totalData.length, totalLength]);
                         if (totalLength == totalData.length) {
+                            console.log(totalData);
                             onSuccess && onSuccess(totalData); //当前方案是数据全部读完再回调
                             sys.stopNotify(peripheral);
                         }
@@ -220,9 +224,13 @@ define(function() {
         binary: function(data) {
             var str = "";
             data.reverse().map(function(item) {
-                str += parseInt(item, 16).toString(2);
+                var bin = parseInt(item, 16).toString(2);
+                str += "00000000".substr(0, 8 - bin.length) + bin;
             });
             return str;
+        },
+        hex: function(data) {
+            return data.reverse().join("");
         },
         float: function(data) {
             var str = "";
@@ -232,7 +240,7 @@ define(function() {
             return str.substr(0, str.length-1);
         },
         int: function(data) {
-            // 整数需要变反，8F F2 22 56 变成为 0x5622f28f
+            // 整数需要变反，先要把8F F2 22 56 变成为 0x5622f28f
             return parseInt(data.reverse().join(""), 16);
         },
         timestamp2Hex: function(timestamp) {
@@ -246,6 +254,24 @@ define(function() {
         temp: function(data) {
             // 温度也需要变反
             return (parseInt(data.reverse().join(""), 16)/16).toFixed(2);
+        },
+        tempList: function(data) {
+            var list = [];
+            for (var i = 0; i < data.length; i=i+2) {
+                list.push(api.translator.temp(data.slice(i,i+2)));
+            };
+            return list;
+        },
+        baseAddr: function(data) {
+            // var hex = (parseInt(data.reverse().join(""), 16)/128).toString(16).toUpperCase();
+            // return hex = "0000".substr(0, 4 - hex.length) + hex; //还需要两位两位倒过来
+            var block = parseInt(data.reverse().join(""), 16)>>7;
+            var hexblock = [];
+            hexblock[0] = (block&0xff).toString(16).toUpperCase();
+            hexblock[1] = (block>>8).toString(16).toUpperCase();
+            hexblock[0] = "00".substr(0, 2 - hexblock[0].length) + hexblock[0];
+            hexblock[1] = "00".substr(0, 2 - hexblock[1].length) + hexblock[1];
+            return hexblock.join(" ");
         },
         literal: function(data, separator) {
             if (!separator) {
@@ -294,13 +320,54 @@ define(function() {
     api.currentData = function(peripheral, onSuccess, onError, onProgress) {
 
         api.execute(peripheral, "7F 00 08 F5", true, function(data) {
-            // [0x7F][LEN][0x08][SUM][1_STATUS][1_RESERVE][2_TEMP][4_BASE][4_NUM]
+            // [0x7F][LEN][0x08][SUM][1_STATUS][1_VOLTAGE][2_TEMP][4_TIME][4_LOGTIME][2_INTVAL][4_NUM]
+            var statusFlag = api.translator.binary(data.slice(4,5));
             var json = {
-                status: api.translator.binary(data.slice(4,5)),
-                temp: api.translator.temp(data.slice(6,8))
+                isRecording: !!(statusFlag.substr(-4,1) & 1),
+                voltage: api.translator.int(data.slice(5,6)),
+                temp: api.translator.temp(data.slice(6,8)),
+                time: api.translator.int(data.slice(8,12)),
+                logTime: api.translator.int(data.slice(12,16)),
+                intval: api.translator.int(data.slice(16,18)),
+                num: api.translator.int(data.slice(18,22))/2
             };
             onSuccess && onSuccess(json);
         }, onError, onProgress);
+      
+    }
+
+    //01 读取历史数据
+    api.historyData = function(peripheral, totalCount, onSuccess, onError, onProgress) {
+        
+        var currentCount = 0;
+        var totalData = [];
+
+        exec(afterExecSuccess);
+        function afterExecSuccess() {
+            exec(afterExecSuccess);
+        }
+
+        //需要获取几次数据，每次读64条
+        function exec(afterSuccess) {
+            var baseAddr = currentCount.toString(16).toUpperCase();
+            var addr = "00".substr(0, 2 - baseAddr.length) + baseAddr + ' 00';
+            var command = api.insertCommandSum("7F 02 01 00 " + addr);
+            api.execute(peripheral, command, true, function(data) {
+                // [0x7F][LEN][0x01][SUM][2_NUM][N_DATA]
+                var leftCount = totalCount - currentCount*64;
+                if (leftCount < 64) {
+                    totalData = totalData.concat(api.translator.tempList(data.slice(6, 6 + leftCount*2)));
+                } else {
+                    totalData = totalData.concat(api.translator.tempList(data.slice(6, 6 + 128)));
+                }
+                currentCount++;
+                if (totalData.length != totalCount) {
+                    afterSuccess && afterSuccess();
+                } else {
+                    onSuccess && onSuccess(totalData);
+                }
+            }, onError, onProgress);
+        }
       
     }
 
